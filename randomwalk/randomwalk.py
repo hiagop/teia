@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import matplotlib.pyplot as pl
 
 class Chromosome:
 
@@ -72,15 +73,35 @@ class Randomwalk(Population):
         return [self.population[i].fitness for i in range(len(self.population))]
 
     def run(self):
+        self.best_scores = []
+        
         for _ in range(self.tcounter):
             
-            scores = []
+            self.scores = []
             
             for _ in range(self.gcounter):
                 self.sort()
                 self.renew()
                 self.sort()
                 
-                scores.append(self.get_fitness()[-1])
+                self.scores.append(self.get_fitness()[-1])
             
-            self.best_scores.append(scores)
+            self.best_scores.append(self.scores)
+            
+    def plot(self):
+        self.bs = np.array(self.best_scores)
+        self.m = np.mean(self.bs, axis=0) 
+        self.std = np.std(self.bs, axis=0)
+        self.idx = np.arange(1, self.gcounter, 10)
+        
+        
+        #print(len(self.bs), len(self.best_scores), len(self.m),len(self.std),len(self.idx))
+        
+        pl.figure(figsize=(10, 5))
+        pl.title(u"Média de Acertos por Geração")
+        pl.xlabel(u"Gerações")
+        pl.ylabel('Acertos')
+        pl.grid(alpha=0.3)
+        pl.errorbar(self.idx, self.m[::10], ls=None, marker='.')
+        pl.bar(self.idx, self.m[::10], yerr=self.std[::10])
+        pl.show()
