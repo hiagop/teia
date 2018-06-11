@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import time
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def round_up(num):
@@ -296,17 +297,57 @@ class GeneticAlgorithm(Population):
         self.gcounter = gcounter
         self.tcounter = tcounter
 
-    def __select(self):
-        return np.random.choice(self.population, self.rsize)
+    def select(self):
+        selected = []
+        threshold = 1 - self.rsize/self.psize
 
-    def __breed(self):
-        pass
+        for _ in range(self.psize):
+            contenders = sorted(np.random.choice(self.population, self.rsize),
+                                key=lambda chromosome: chromosome.fitness)
+            if np.random.rand() < threshold:
+                selected.append(contenders[-1])
+            else:
+                selected.append(contenders[0])
+        return selected
 
-    def __mutate(self):
-        pass
+    def breed(self, parents, points=2):
+        children = []
 
-    def elitefy(self):
-        pass
+        for i in range(0, self.psize -1, 2):
+            couple = [parents[i], parents[i+1]]
+            if np.random.rand() > self.brate:
+                children.extend(couple)
+            else:
+                ch1, ch2 = couple[0], couple[1]
+
+                pts = np.random.randint(0, self.csize, size=points)
+
+                while pts[0]-pts[1] <= 1:
+                    pts = np.random.randint(0, self.csize, size=2)
+
+                ch1.genes[pts[1]:pts[0]], ch2.genes[pts[0]:pts[1]] = couple[1].genes[pts[1]:pts[0]], couple[0].genes[pts[0]:pts[1]]
+
+                children.extend([ch1, ch2])
+
+        return children
+
+    def mutate(self):
+        for chromosome in self.population:
+            for i in range(1, self.csize - 1):
+                if np.random.rand() < self.mrate:
+                    chromosome.genes[i] = int(not(chromosome.genes[i]))
+
+                    s = np.random.normal(0, self.sigma)
+                    if not (s > -1.5*self.sigma and 1.5*self.sigma > s):
+                        chromosome.genes[i-1] = int(not(chromosome.genes[i-1]))
+                        chromosome.genes[i+1] = int(not(chromosome.genes[i+1]))
+            # chromosome.calculate_fitness(self.target)
+
+    def __elitefy(self, elite):
+        length = self.psize/2
+        idx = np.random.randint(0, length)
+        
+        self.population[idx] = elite
 
     def run(self, verbose=False):
         """
@@ -356,17 +397,29 @@ class GeneticAlgorithm(Population):
 
             while g < self.gcounter:
 
-                selected = self.__select()
-                self.population = self.__breed(selected)
-                self.__mutate()
-                # self.update(self.target)
+                selected = self.select()
+                self.population = self.breed(selected)
+                self.mutate()
+                self.update(self.target)
                 self.sort()
+                
+                print(f"Gen {k}")
+                print(f"Elite: {elite.fitness}")
+                print(f"Fitness:\n{[c.fitness for c in self.population]!s}")
 
                 if self.population[-1].fitness > elite.fitness:
                     elite = self.population[-1]
-                else:
-                    self.elitefy(elite)
+                    print(f"New elite: {self.population[-1].fitness}")
+                elif self.population[-1].fitness < elite.fitness:
+                    length = self.psize/2
+                    idx = np.random.randint(0, length)
+
+                    self.population[idx] = elite
+                    
+                    print(f"Elite returned: {elite.fitness}")
+                    print(f"Fitness before sorting:\n{[c.fitness for c in self.population]!s}")
                     self.sort()
+                    print(f"Fitness after sorting:\n{[c.fitness for c in self.population]!s}")
 
                 # j = self.get_fitness()[-1]
                 scores.append(elite.fitness)
@@ -385,7 +438,7 @@ class GeneticAlgorithm(Population):
                     print("\tBest individual: {!s}".format(elite))
                     print("\tBest score: {!s}%\n".format(elite.fitness))
 
-                if verbose and j == 100:
+                if verbose and elite.fitness == 100:
                     print("\tTarget found!\n")
                     break
 
