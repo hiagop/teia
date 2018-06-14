@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import time
-
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+
+from copy import deepcopy
 
 
 def round_up(num):
@@ -119,7 +120,6 @@ class Randomwalk(Population):
     """
     def __init__(self, alphabet, target, psize, gcounter, tcounter=30):
         """
-
         :param alphabet: Symbols used to generate the population individuals.
         :param target: The target to be achieved by the algorithm.
         :param psize: Population size.
@@ -275,7 +275,6 @@ class GeneticAlgorithm(Population):
 
     def __init__(self, alphabet, target, psize, rsize, mrate, brate, sigma, gcounter, tcounter=30):
         """
-
         :param alphabet: Set of symbols used to generate the individuals of the population.
         :param target: The target to be achieved by the algorithm.
         :param psize: Population size.
@@ -314,20 +313,21 @@ class GeneticAlgorithm(Population):
         children = []
 
         for i in range(0, self.psize -1, 2):
-            couple = [parents[i], parents[i+1]]
+            
             if np.random.rand() > self.brate:
-                children.extend(couple)
+                children.extend((parents[i], parents[i+1]))
             else:
-                ch1, ch2 = couple[0], couple[1]
+                ch1, ch2 = deepcopy(parents[i]), deepcopy(parents[i+1])
 
                 pts = np.random.randint(0, self.csize, size=points)
 
                 while pts[0]-pts[1] <= 1:
                     pts = np.random.randint(0, self.csize, size=2)
 
-                ch1.genes[pts[1]:pts[0]], ch2.genes[pts[0]:pts[1]] = couple[1].genes[pts[1]:pts[0]], couple[0].genes[pts[0]:pts[1]]
+                ch1.genes[pts[1]:pts[0]] = parents[i+1].genes[pts[1]:pts[0]]
+                ch2.genes[pts[0]:pts[1]] = parents[i].genes[pts[0]:pts[1]]
 
-                children.extend([ch1, ch2])
+                children.extend((ch1, ch2))
 
         return children
 
@@ -341,13 +341,12 @@ class GeneticAlgorithm(Population):
                     if not (s > -1.5*self.sigma and 1.5*self.sigma > s):
                         chromosome.genes[i-1] = int(not(chromosome.genes[i-1]))
                         chromosome.genes[i+1] = int(not(chromosome.genes[i+1]))
-            # chromosome.calculate_fitness(self.target)
 
-    def __elitefy(self, elite):
-        length = self.psize/2
-        idx = np.random.randint(0, length)
-        
-        self.population[idx] = elite
+    #def __elitefy(self, elite):
+    #    length = self.psize/2
+    #    idx = np.random.randint(0, length)
+    #    
+    #    self.population[idx] = elite
 
     def run(self, verbose=False):
         """
@@ -373,7 +372,7 @@ class GeneticAlgorithm(Population):
             print("Population size: {!s}".format(self.psize))
             print("Total executions: {!s}".format(self.tcounter))
             print("Max generations without change: {!s}\n".format(self.gcounter))
-
+            
         # Runs the algorithm tcounter times.
         for i in range(self.tcounter):
 
@@ -381,47 +380,64 @@ class GeneticAlgorithm(Population):
             # based on a given target.
             self.population = self._gen_pop(self.psize, self.csize, self.alphabet)
             self.update(self.target)
+            self.sort()
 
             # Initiates a list to receive the best fitness values
             # achieved per generation.
             scores = []
 
-            # j = 0  # Holds the value of the best fitness per generation.
             k = 1  # Holds the current generation.
             g = 0  # Holds the number of generations with no changes to the best fitness.
-
-            elite = Chromosome()
+            
+            elite = deepcopy(self.population[-1])
+            #elite = Chromosome()
+            #elite.genes = self.population[-1].genes
+            #elite.fitness = self.population[-1].fitness
 
             if verbose:
                 print('\nExecution {!s} started...\n'.format(i + 1))
 
             while g < self.gcounter:
-
+                
+                if verbose:
+                    print("\tGeneration {!s}".format(k))
+                
                 selected = self.select()
                 self.population = self.breed(selected)
                 self.mutate()
                 self.update(self.target)
                 self.sort()
                 
-                print(f"Gen {k}")
-                print(f"Elite: {elite.fitness}")
-                print(f"Fitness:\n{[c.fitness for c in self.population]!s}")
-
                 if self.population[-1].fitness > elite.fitness:
-                    elite = self.population[-1]
-                    print(f"New elite: {self.population[-1].fitness}")
+                    elite = deepcopy(self.population[-1])
+                    #elite.genes = self.population[-1].genes
+                    #elite.fitness = self.population[-1].fitness
+                    
+                    if verbose:
+                        print("\tNew elite ({!s}): {}".format(id(elite), elite.fitness))
+                    
                 elif self.population[-1].fitness < elite.fitness:
                     length = self.psize/2
                     idx = np.random.randint(0, length)
-
-                    self.population[idx] = elite
                     
-                    print(f"Elite returned: {elite.fitness}")
-                    print(f"Fitness before sorting:\n{[c.fitness for c in self.population]!s}")
+                    self.population[idx] = deepcopy(elite)
+                    #self.population[idx].genes = elite.genes
+                    #self.population[idx].fitness = elite.fitness
+                    
+                    if verbose:
+                        print("\tElite returned ({!s}): {}".format(id(elite), elite.fitness))
+                        
                     self.sort()
-                    print(f"Fitness after sorting:\n{[c.fitness for c in self.population]!s}")
-
-                # j = self.get_fitness()[-1]
+                    
+                else: 
+                    elite = deepcopy(self.population[-1])
+                    #elite.genes = self.population[-1].genes
+                    #elite.fitness = self.population[-1].fitness
+                    
+                    if verbose:
+                        print("\tElite ({!s} {}) not changed.".format(id(elite), elite.fitness))
+                    #print("Fitness:\n{}\n".format([c.fitness for c in self.population]))
+                
                 scores.append(elite.fitness)
 
                 # Only compares the last two elements of
@@ -434,12 +450,13 @@ class GeneticAlgorithm(Population):
                         g = 0
 
                 if verbose:
-                    print("\tGeneration {!s}".format(k))
-                    print("\tBest individual: {!s}".format(elite))
-                    print("\tBest score: {!s}%\n".format(elite.fitness))
+                    print("\tBest individual: {!s}".format(self.population[-1]))
+                    print("\tBest score: {!s}%\n".format(self.population[-1].fitness))
 
-                if verbose and elite.fitness == 100:
-                    print("\tTarget found!\n")
+                if elite.fitness == 100:
+                    if verbose:
+                        print("\tTarget found!\n")
+                    k += 1
                     break
 
                 k += 1
@@ -449,8 +466,8 @@ class GeneticAlgorithm(Population):
 
             if verbose:
                 print("Execution {0!s} ended in {1!s} generations".format(i + 1, k - 1))
-                print("Target: {}".format(self.target))
-                print("Result: {}".format(elite))
+                print("Target: {}".format("".join(map(str, self.target))))
+                print("Result: {}".format(self.population[-1]))
                 print("Best score: {!s}%\n".format(scores[-1]))
 
         # Holds the number of the longest execution, rounded up to a multiple of ten.
